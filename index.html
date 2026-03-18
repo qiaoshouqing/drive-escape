@@ -1369,6 +1369,9 @@ async function switchCity(name, lng, lat, countryCode) {
     // 保存到 localStorage
     try { localStorage.setItem(cacheKey, JSON.stringify(osrmCache)); } catch(e) {}
   }
+
+  // 更新 URL
+  updateURL(name);
 }
 
 // ── URL 参数：支持 ?city=xxx ──
@@ -1380,10 +1383,6 @@ function updateURL(name) {
 
 // 切换城市时更新 URL
 const _origSwitchCity = switchCity;
-switchCity = async function(name, lng, lat, cc) {
-  await _origSwitchCity(name, lng, lat, cc);
-  updateURL(name);
-};
 
 // ── 首次加载 ──
 (async function init() {
