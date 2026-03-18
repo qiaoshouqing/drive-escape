@@ -335,7 +335,7 @@
   <div class="title-text">
     <div class="en">Weekend Self-Driving Escape Plan</div>
     <h1>周末自驾逃离计划</h1>
-    <div class="sub" id="title-sub">杭州 · 耗时&距离</div>
+    <div class="sub" id="title-sub">...</div>
   </div>
 </div>
 
@@ -418,9 +418,18 @@ function loadLang(code) {
   });
 }
 
-// init lang from localStorage
+// 根据浏览器语言自动选择，localStorage 优先
+function detectLang() {
+  const browserLang = (navigator.language || navigator.userLanguage || '').toLowerCase();
+  if (browserLang.startsWith('ja')) return 'ja';
+  if (browserLang.startsWith('zh-tw') || browserLang.startsWith('zh-hk') || browserLang.startsWith('zh-hant')) return 'zh-TW';
+  if (browserLang.startsWith('zh')) return 'zh-CN';
+  if (browserLang.startsWith('en')) return 'en';
+  return 'en'; // 其他语言 fallback 英语
+}
+
 (function() {
-  const saved = localStorage.getItem('lang') || 'zh-CN';
+  const saved = localStorage.getItem('lang') || detectLang();
   const sel = document.getElementById('lang-select');
   sel.value = saved;
   if (saved !== 'zh-CN') {
@@ -1415,29 +1424,44 @@ const _origSwitchCity = switchCity;
     } catch(e) {}
   }
 
-  // 默认加载杭州（预生成数据）
-  try {
-    const res = await fetch('data/hangzhou.json');
-    const data = await res.json();
+  // 根据语言选择默认城市
+  const currentLang = localStorage.getItem('lang') || detectLang();
+  const DEFAULT_CITIES = {
+    'zh-CN': { name: '杭州', lng: 120.15, lat: 30.26, cc: 'cn', preset: 'data/hangzhou.json' },
+    'zh-TW': { name: '台北', lng: 121.56, lat: 25.04, cc: 'tw' },
+    'ja':    { name: '東京', lng: 139.69, lat: 35.69, cc: 'jp' },
+    'en':    { name: 'London', lng: -0.12, lat: 51.51, cc: 'gb' }
+  };
+  const defaultCity = DEFAULT_CITIES[currentLang] || DEFAULT_CITIES['en'];
 
-    currentOrigin = [120.15, 30.26];
-    currentCityName = "杭州";
-    document.getElementById("title-sub").textContent = t('subtitle', { city: '杭州' });
-    document.getElementById("legend-origin").textContent = t('originCity', { city: '杭州' });
-    document.title = t('pageTitle', { city: '杭州' });
+  // 如果有预生成数据，秒开
+  if (defaultCity.preset) {
+    try {
+      const res = await fetch(defaultCity.preset);
+      const data = await res.json();
 
-    allCountyFeatures = data.features;
-    driveDataMap = data.driveData;
-    allCityOutlines = [];
-    allGrayFeatures = [];
-    allGrayCityOutlines = [];
-    activeLayers._provOutlines = [];
+      currentOrigin = [defaultCity.lng, defaultCity.lat];
+      currentCityName = defaultCity.name;
+      document.getElementById("title-sub").textContent = t('subtitle', { city: defaultCity.name });
+      document.getElementById("legend-origin").textContent = t('originCity', { city: defaultCity.name });
+      document.title = t('pageTitle', { city: defaultCity.name });
 
-    renderMap();
-    hideLoading();
-  } catch(e) {
-    console.error('Failed to load preset data, falling back to API', e);
-    await _origSwitchCity("杭州", 120.15, 30.26, 'cn');
+      allCountyFeatures = data.features;
+      driveDataMap = data.driveData;
+      allCityOutlines = [];
+      allGrayFeatures = [];
+      allGrayCityOutlines = [];
+      activeLayers._provOutlines = [];
+
+      renderMap();
+      hideLoading();
+    } catch(e) {
+      console.error('Failed to load preset data, falling back to API', e);
+      await switchCity(defaultCity.name, defaultCity.lng, defaultCity.lat, defaultCity.cc);
+    }
+  } else {
+    // 没有预生成数据，走 API
+    await switchCity(defaultCity.name, defaultCity.lng, defaultCity.lat, defaultCity.cc);
   }
 })();
 </script>
