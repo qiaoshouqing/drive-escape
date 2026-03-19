@@ -439,6 +439,24 @@
     .welcome-city-tag:hover {
       background: rgba(26,110,92,0.18);
     }
+    .welcome-lang-switcher {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+    }
+    .welcome-lang-switcher select {
+      padding: 8px 10px;
+      border: none;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      font-size: 12px;
+      outline: none;
+      font-family: system-ui, -apple-system, sans-serif;
+      cursor: pointer;
+    }
     @media (max-width: 520px) {
       .welcome-card { padding: 32px 24px 28px; }
       .welcome-headline { font-size: 21px; }
@@ -448,6 +466,14 @@
 <body>
 
 <div id="welcome-screen">
+  <div class="welcome-lang-switcher">
+    <select id="welcome-lang-select">
+      <option value="zh-CN">简体中文</option>
+      <option value="zh-TW">繁體中文</option>
+      <option value="ja">日本語</option>
+      <option value="en">English</option>
+    </select>
+  </div>
   <div class="welcome-card">
     <div class="welcome-eyebrow" id="welcome-eyebrow">Drive Escape</div>
     <div class="welcome-headline" id="welcome-headline">Where can you escape by car?</div>
@@ -588,7 +614,9 @@ function detectLang() {
 (function() {
   const saved = localStorage.getItem('lang') || detectLang();
   const sel = document.getElementById('lang-select');
+  const welcomeSel = document.getElementById('welcome-lang-select');
   sel.value = saved;
+  if (welcomeSel) welcomeSel.value = saved;
   if (saved !== 'zh-CN') {
     loadLang(saved).then(() => {
       // 确保 DOM 完全就绪后再更新文案
@@ -606,11 +634,14 @@ function detectLang() {
       applyLang();
     }
   }
-  sel.addEventListener('change', () => {
-    const code = sel.value;
+  function onLangChange(code) {
     localStorage.setItem('lang', code);
+    sel.value = code;
+    if (welcomeSel) welcomeSel.value = code;
     loadLang(code).then(applyLang);
-  });
+  }
+  sel.addEventListener('change', () => onLangChange(sel.value));
+  if (welcomeSel) welcomeSel.addEventListener('change', () => onLangChange(welcomeSel.value));
 })();
 </script>
 <script>
