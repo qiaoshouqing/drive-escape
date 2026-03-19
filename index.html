@@ -261,8 +261,10 @@
     @media (max-width: 640px) {
       .title-overlay {
         top: 8px;
-        padding: 6px 16px;
-        width: 180px;
+        padding: 6px 14px;
+        width: auto;
+        max-width: calc(100vw - 120px);
+        white-space: nowrap;
       }
       .title-overlay .en { font-size: 7px; }
       .title-overlay h1 { font-size: 15px; }
