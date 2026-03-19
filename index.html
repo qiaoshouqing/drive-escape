@@ -1627,6 +1627,8 @@ function showWelcome() {
     currentCityAbortController.abort();
     currentCityAbortController = null;
   }
+  // 清除 URL 参数
+  history.replaceState(null, '', '/');
 }
 
 function dismissWelcome() {
