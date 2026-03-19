@@ -1320,10 +1320,11 @@ async function switchCity(name, lng, lat, countryCode) {
   currentOrigin = [lng, lat];
   currentCityName = name;
 
-  // 3. 更新标题
+  // 3. 更新标题 + URL（四处同步）
   document.getElementById("title-sub").textContent = t('subtitle', { city: name });
   document.getElementById("legend-origin").textContent = t('originCity', { city: name });
   document.title = t('pageTitle', { city: name });
+  updateURL(name);
 
   // 4. loading
   showLoading(t('loading'));
