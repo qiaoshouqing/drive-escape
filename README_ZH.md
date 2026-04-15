@@ -24,11 +24,21 @@
 | 地图渲染 | Leaflet + OpenStreetMap |
 | 中国区划 | DataV GeoJSON API |
 | 海外区划 | Overpass API |
-| 驾车时间 | OSRM Table API |
-| 城市搜索 | Nominatim API |
+| 驾车时间 | OSRM Table API（默认） / 高德驾车 API（国内） |
+| 城市搜索 | Nominatim API（默认） / 高德地理编码 API（国内） |
 | 部署 | Cloudflare Pages + Functions |
 
-全部开源，无收费接口。
+默认全部开源、无收费接口。
+
+### 可选：国内用户启用高德
+
+OSRM 与 Nominatim 在国内访问较慢或受限。在 Cloudflare Pages 配置以下两个
+环境变量，界面语言为 `zh-CN` 时会自动切换到高德接口：
+
+| 变量名 | 值 |
+|--------|----|
+| `USE_AMAP` | `true` |
+| `AMAP_KEY` | 你的高德 Web 服务 Key |
 
 ## 本地运行
 
