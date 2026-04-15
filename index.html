@@ -660,6 +660,20 @@ function detectLang() {
 })();
 </script>
 <script>
+// ── 高德 API 配置加载 ──
+window.USE_AMAP = false;
+const _amapConfigReady = (async () => {
+  try {
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return;
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    window.USE_AMAP = !!cfg.useAmap;
+  } catch(e) {}
+})();
+function shouldUseAmap() {
+  return window.USE_AMAP && window.LANG?.code === 'zh-CN';
+}
+
 // ── 色阶 ──
 const colorBands = [
   { min: 0.0, max: 0.5, color: "#1a6e5c", label: "0–0.5h" },
@@ -773,6 +787,42 @@ function haversine(lng1, lat1, lng2, lat2) {
   const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ── GCJ-02 / WGS-84 坐标转换（高德地图使用 GCJ-02）──
+function _transformLat(x, y) {
+  let r = -100.0 + 2.0*x + 3.0*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
+  r += (20.0*Math.sin(6.0*x*Math.PI) + 20.0*Math.sin(2.0*x*Math.PI)) * 2.0/3.0;
+  r += (20.0*Math.sin(y*Math.PI) + 40.0*Math.sin(y/3.0*Math.PI)) * 2.0/3.0;
+  r += (160.0*Math.sin(y/12.0*Math.PI) + 320.0*Math.sin(y*Math.PI/30.0)) * 2.0/3.0;
+  return r;
+}
+function _transformLng(x, y) {
+  let r = 300.0 + x + 2.0*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
+  r += (20.0*Math.sin(6.0*x*Math.PI) + 20.0*Math.sin(2.0*x*Math.PI)) * 2.0/3.0;
+  r += (20.0*Math.sin(x*Math.PI) + 40.0*Math.sin(x/3.0*Math.PI)) * 2.0/3.0;
+  r += (150.0*Math.sin(x/12.0*Math.PI) + 300.0*Math.sin(x/30.0*Math.PI)) * 2.0/3.0;
+  return r;
+}
+function _isInChina(lng, lat) {
+  return lng >= 72.004 && lng <= 137.8347 && lat >= 0.8293 && lat <= 55.8271;
+}
+function wgs84ToGcj02(lng, lat) {
+  if (!_isInChina(lng, lat)) return [lng, lat];
+  let dLat = _transformLat(lng - 105.0, lat - 35.0);
+  let dLng = _transformLng(lng - 105.0, lat - 35.0);
+  const radLat = lat / 180.0 * Math.PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - 0.00669342162296594 * magic * magic;
+  const sq = Math.sqrt(magic);
+  dLat = (dLat * 180.0) / ((6378245.0 * (1 - 0.00669342162296594)) / (magic * sq) * Math.PI);
+  dLng = (dLng * 180.0) / (6378245.0 / sq * Math.cos(radLat) * Math.PI);
+  return [lng + dLng, lat + dLat];
+}
+function gcj02ToWgs84(lng, lat) {
+  if (!_isInChina(lng, lat)) return [lng, lat];
+  const [gLng, gLat] = wgs84ToGcj02(lng, lat);
+  return [lng * 2 - gLng, lat * 2 - gLat];
 }
 
 function estimateDriveTime(lng, lat) {
@@ -926,25 +976,51 @@ searchInput.addEventListener("input", () => {
   searchTimer = setTimeout(() => searchCity(q), 400);
 });
 
+// ── 统一搜索抽象：根据 shouldUseAmap() 切换 Nominatim / 高德 ──
+async function geocodeSearch(query, lang, limit) {
+  if (shouldUseAmap()) {
+    const url = `/api/amap-geocode?q=${encodeURIComponent(query)}&limit=${limit}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data.map(item => ({
+      displayName: item.display_name,
+      name: item.display_name.split(',')[0].trim(),
+      sub: item.display_name.split(',').slice(1, 3).join(', ').trim(),
+      lon: parseFloat(item.lon),
+      lat: parseFloat(item.lat),
+      countryCode: item.address?.country_code || ''
+    }));
+  } else {
+    const acceptLang = lang === 'en' ? 'en' : lang === 'ja' ? 'ja' : 'zh';
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=${limit}&accept-language=${acceptLang}`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'DriveEscape/1.0' } });
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data.map(item => ({
+      displayName: item.display_name,
+      name: item.display_name.split(',')[0].trim(),
+      sub: item.display_name.split(',').slice(1, 3).join(', ').trim(),
+      lon: parseFloat(item.lon),
+      lat: parseFloat(item.lat),
+      countryCode: item.address?.country_code || ''
+    }));
+  }
+}
+
 async function searchCity(query) {
   try {
     const lang = window.LANG?.code || 'zh-CN';
-    const acceptLang = lang === 'en' ? 'en' : lang === 'ja' ? 'ja' : 'zh';
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=8&accept-language=${acceptLang}`;
-    const res = await fetch(url);
-    const data = await res.json();
+    const data = await geocodeSearch(query, lang, 8);
     if (!data.length) {
       searchResults.innerHTML = `<div class="result-item" style="color:#888">${t('noResult')}</div>`;
       searchResults.style.display = "block";
       return;
     }
     searchResults.innerHTML = data.map((item, i) => {
-      const name = item.display_name.split(",")[0];
-      const sub = item.display_name.split(",").slice(1, 3).join(", ");
-      const cc = item.address?.country_code || '';
-      return `<div class="result-item" data-idx="${i}" data-lng="${item.lon}" data-lat="${item.lat}" data-name="${name}" data-cc="${cc}">
-        <div>${name}</div>
-        <div class="result-sub">${sub}</div>
+      return `<div class="result-item" data-idx="${i}" data-lng="${item.lon}" data-lat="${item.lat}" data-name="${item.name}" data-cc="${item.countryCode}">
+        <div>${item.name}</div>
+        <div class="result-sub">${item.sub}</div>
       </div>`;
     }).join("");
     searchResults.style.display = "block";
@@ -1063,37 +1139,58 @@ async function loadProvinceCities(provAdcode) {
 }
 
 // ── OSRM 批量驾车时间 ──
-async function fetchOSRMBatch(originLng, originLat, destinations) {
+async function fetchOSRMBatch(originLng, originLat, destinations, signal) {
   // destinations: [{ adcode, lng, lat, name }]
   // 每批最多 50 个
   const results = {};
   const batchSize = 50;
 
   for (let i = 0; i < destinations.length; i += batchSize) {
+    if (signal && signal.aborted) break;
     const batch = destinations.slice(i, i + batchSize);
-    const coords = `${originLng},${originLat};` + batch.map(d => `${d.lng},${d.lat}`).join(";");
-    const destIndices = batch.map((_, j) => j + 1).join(";");
-    const url = `https://router.project-osrm.org/table/v1/driving/${coords}?sources=0&destinations=${destIndices}&annotations=duration,distance`;
 
     try {
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.code === "Ok") {
-        const durations = data.durations[0];
-        const distances = data.distances[0];
-        batch.forEach((d, j) => {
-          const timeSec = durations[j];
-          const distM = distances[j];
-          if (timeSec != null && timeSec > 0) {
-            results[d.adcode] = {
-              name: d.name,
-              time: Math.round(timeSec / 360) / 10,
-              dist: Math.round(distM / 1000)
-            };
-          }
-        });
+      let durations, distances;
+
+      if (shouldUseAmap()) {
+        // 高德路线：坐标转 GCJ-02
+        const [oLng, oLat] = wgs84ToGcj02(originLng, originLat);
+        const origin = `${oLng},${oLat}`;
+        const dests = batch.map(d => {
+          const [gLng, gLat] = wgs84ToGcj02(d.lng, d.lat);
+          return `${gLng},${gLat}`;
+        }).join('|');
+        const url = `/api/amap-driving?origin=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(dests)}`;
+        const res = await fetch(url, signal ? { signal } : {});
+        const data = await res.json();
+        durations = data.durations || [];
+        distances = data.distances || [];
+      } else {
+        // OSRM 路线
+        const coords = `${originLng},${originLat};` + batch.map(d => `${d.lng},${d.lat}`).join(";");
+        const destIndices = batch.map((_, j) => j + 1).join(";");
+        const url = `https://router.project-osrm.org/table/v1/driving/${coords}?sources=0&destinations=${destIndices}&annotations=duration,distance`;
+        const res = await fetch(url, signal ? { signal } : {});
+        const data = await res.json();
+        if (data.code !== "Ok") continue;
+        durations = data.durations[0];
+        distances = data.distances[0];
       }
-    } catch(e) {}
+
+      batch.forEach((d, j) => {
+        const timeSec = durations[j];
+        const distM = distances[j];
+        if (timeSec != null && timeSec > 0) {
+          results[d.adcode] = {
+            name: d.name,
+            time: Math.round(timeSec / 360) / 10,
+            dist: Math.round(distM / 1000)
+          };
+        }
+      });
+    } catch(e) {
+      if (e.name === 'AbortError') break;
+    }
 
     // 批次间间隔
     if (i + batchSize < destinations.length) {
@@ -1551,7 +1648,7 @@ async function switchCity(name, lng, lat, countryCode) {
     hideLoading();
     updateURL(name);
 
-    // 9. OSRM 批量计算真实驾车时间（逐批更新渲染）
+    // 9. 批量计算真实驾车时间（逐批更新渲染）
     const destinations = [];
     for (const f of allCountyFeatures) {
       const code = String(f?.properties?.adcode || "");
@@ -1563,47 +1660,29 @@ async function switchCity(name, lng, lat, countryCode) {
     }
 
     const batchSize = 50;
-    const osrmCache = {};
+    const driveCache = {};
     const batches = [];
     for (let i = 0; i < destinations.length; i += batchSize) {
       batches.push(destinations.slice(i, i + batchSize));
     }
 
-    // 串行逐批请求 OSRM，每批完成后刷新
+    // 串行逐批请求，每批完成后刷新
     showLoading(t('loadingDriveTime', { done: '0', total: String(batches.length) }));
     for (let bi = 0; bi < batches.length; bi++) {
+      if (signal.aborted) break;
       const batch = batches[bi];
-      const coords = `${lng},${lat};` + batch.map(d => `${d.lng},${d.lat}`).join(";");
-      const destIndices = batch.map((_, j) => j + 1).join(";");
-      const url = `https://router.project-osrm.org/table/v1/driving/${coords}?sources=0&destinations=${destIndices}&annotations=duration,distance`;
-      try {
-        if (signal.aborted) break; // 欢迎屏打开，停止
-        const res = await fetch(url, { signal });
-        const data = await res.json();
-        if (data.code === "Ok") {
-          const durations = data.durations[0];
-          const distances = data.distances[0];
-          batch.forEach((d, j) => {
-            const timeSec = durations[j];
-            const distM = distances[j];
-            if (timeSec != null && timeSec > 0) {
-              const result = {
-                name: d.name,
-                time: Math.round(timeSec / 360) / 10,
-                dist: Math.round(distM / 1000)
-              };
-              driveDataMap[d.adcode] = { ...driveDataMap[d.adcode], ...result, estimated: false };
-              osrmCache[d.adcode] = result;
-            } else {
-              // OSRM 返回 null = 无法到达（跨海等），标记为超远
-              driveDataMap[d.adcode] = { ...driveDataMap[d.adcode], time: 999, dist: 0, estimated: false };
-              osrmCache[d.adcode] = { name: d.name, time: 999, dist: 0 };
-            }
-          });
-        }
-      } catch(e) {
-        if (e.name === 'AbortError') break; // 用户回到欢迎屏，停止
+      const batchResults = await fetchOSRMBatch(lng, lat, batch, signal);
+      for (const [adcode, result] of Object.entries(batchResults)) {
+        driveDataMap[adcode] = { ...driveDataMap[adcode], ...result, estimated: false };
+        driveCache[adcode] = result;
       }
+      // 标记无结果的为不可达
+      batch.forEach(d => {
+        if (!batchResults[d.adcode]) {
+          driveDataMap[d.adcode] = { ...driveDataMap[d.adcode], time: 999, dist: 0, estimated: false };
+          driveCache[d.adcode] = { name: d.name, time: 999, dist: 0 };
+        }
+      });
       if (signal.aborted) break;
       showLoading(t('loadingDriveTime', { done: String(bi + 1), total: String(batches.length) }));
       renderMap(true);
@@ -1611,7 +1690,7 @@ async function switchCity(name, lng, lat, countryCode) {
     if (!signal.aborted) hideLoading();
 
     // 保存到 localStorage
-    try { localStorage.setItem(cacheKey, JSON.stringify(osrmCache)); } catch(e) {}
+    try { localStorage.setItem(cacheKey, JSON.stringify(driveCache)); } catch(e) {}
   }
 
   // 更新 URL
@@ -1677,16 +1756,14 @@ async function welcomeSelectCity(name) {
   document.title = t('pageTitle', { city: name });
   updateURL(name);
   document.getElementById('city-search').value = name;
-  // 通过 Nominatim 搜索
+  // 通过 geocodeSearch 搜索
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&addressdetails=1&limit=1&accept-language=${window.LANG?.code?.startsWith("zh-TW") ? "zh-TW,zh" : window.LANG?.code === "ja" ? "ja" : window.LANG?.code === "zh-CN" ? "zh" : "en"}`, { headers: { 'User-Agent': 'DriveEscape/1.0' } });
-    const data = await res.json();
+    const lang = window.LANG?.code || 'zh-CN';
+    const data = await geocodeSearch(name, lang, 1);
     if (data.length > 0) {
       const item = data[0];
-      const resolved = item.display_name.split(",")[0];
-      const cc = item.address?.country_code || '';
-      document.getElementById('city-search').value = resolved;
-      await switchCity(resolved, parseFloat(item.lon), parseFloat(item.lat), cc);
+      document.getElementById('city-search').value = item.name;
+      await switchCity(item.name, item.lon, item.lat, item.countryCode);
       return;
     }
   } catch(e) {}
@@ -1704,8 +1781,8 @@ async function welcomeSelectCity(name) {
     if (q.length < 2) { results.style.display = 'none'; return; }
     timer = setTimeout(async () => {
       try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5&accept-language=${window.LANG?.code?.startsWith("zh-TW") ? "zh-TW,zh" : window.LANG?.code === "ja" ? "ja" : window.LANG?.code === "zh-CN" ? "zh" : "en"}`, { headers: { 'User-Agent': 'DriveEscape/1.0' } });
-        const data = await r.json();
+        const lang = window.LANG?.code || 'zh-CN';
+        const data = await geocodeSearch(q, lang, 5);
         results.innerHTML = '';
         if (!data.length) {
           results.innerHTML = `<div class="result-item" style="color:#888">${t('noResult')}</div>`;
@@ -1714,16 +1791,14 @@ async function welcomeSelectCity(name) {
         data.forEach(item => {
           const el = document.createElement('div');
           el.className = 'result-item';
-          el.textContent = item.display_name;
+          el.textContent = item.displayName;
           el.onclick = async () => {
             results.style.display = 'none';
-            const name = item.display_name.split(",")[0];
-            const cc = item.address?.country_code || '';
-            input.value = name;
+            input.value = item.name;
             dismissWelcome();
             showLoading(t('loading'));
-            document.getElementById('city-search').value = name;
-            await switchCity(name, parseFloat(item.lon), parseFloat(item.lat), cc);
+            document.getElementById('city-search').value = item.name;
+            await switchCity(item.name, item.lon, item.lat, item.countryCode);
           };
           results.appendChild(el);
         });
@@ -1738,6 +1813,9 @@ async function welcomeSelectCity(name) {
 
 // ── 首次加载 ──
 (async function init() {
+  // 等待高德配置加载完成
+  await _amapConfigReady;
+
   // 检查 URL 参数是否指定了城市
   const urlCity = new URLSearchParams(window.location.search).get('city');
 
@@ -1755,14 +1833,12 @@ async function welcomeSelectCity(name) {
     showLoading(t('loading') || '...');
 
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(urlCity)}&format=json&addressdetails=1&limit=1&accept-language=${window.LANG?.code?.startsWith("zh-TW") ? "zh-TW,zh" : window.LANG?.code === "ja" ? "ja" : window.LANG?.code === "zh-CN" ? "zh" : "en"}`, { headers: { 'User-Agent': 'DriveEscape/1.0' } });
-      const data = await res.json();
+      const lang = window.LANG?.code || 'zh-CN';
+      const data = await geocodeSearch(urlCity, lang, 1);
       if (data.length > 0) {
         const item = data[0];
-        const name = item.display_name.split(",")[0];
-        const cc = item.address?.country_code || '';
-        searchInput.value = name;
-        await switchCity(name, parseFloat(item.lon), parseFloat(item.lat), cc);
+        searchInput.value = item.name;
+        await switchCity(item.name, item.lon, item.lat, item.countryCode);
         return;
       }
     } catch(e) {}
