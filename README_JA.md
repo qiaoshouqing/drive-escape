@@ -24,11 +24,21 @@
 | 地図 | Leaflet + OpenStreetMap |
 | 中国行政区画 | DataV GeoJSON API |
 | 海外行政区画 | Overpass API |
-| 運転時間 | OSRM Table API |
-| 都市検索 | Nominatim API |
+| 運転時間 | OSRM Table API（既定） / Amap Driving API（中国本土） |
+| 都市検索 | Nominatim API（既定） / Amap Geocode API（中国本土） |
 | デプロイ | Cloudflare Pages + Functions |
 
-すべてオープンソース。有料APIなし。
+既定では全てオープンソース・有料APIなし。
+
+### オプション：中国本土ユーザー向け Amap（高德）
+
+中国本土からは OSRM や Nominatim が遅い／遮断される場合があります。Cloudflare
+Pages に以下の環境変数を設定すると、UI 言語が `zh-CN` のとき Amap に切り替わります：
+
+| 変数名 | 値 |
+|--------|----|
+| `USE_AMAP` | `true` |
+| `AMAP_KEY` | Amap Web サービスキー |
 
 ## ローカル実行
 

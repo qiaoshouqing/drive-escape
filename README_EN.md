@@ -23,11 +23,21 @@ Pick a city, see how far you can drive in 5 hours.
 | Map | Leaflet + OpenStreetMap |
 | China Boundaries | DataV GeoJSON API |
 | International | Overpass API |
-| Driving Time | OSRM Table API |
-| City Search | Nominatim API |
+| Driving Time | OSRM Table API (default) / Amap Driving API (CN) |
+| City Search | Nominatim API (default) / Amap Geocode API (CN) |
 | Hosting | Cloudflare Pages + Functions |
 
-No paid APIs. Fully open source.
+No paid APIs by default. Fully open source.
+
+### Optional: Amap (高德) for Chinese users
+
+OSRM and Nominatim can be slow or blocked from mainland China. Set two
+Cloudflare Pages env vars to switch to Amap when the UI language is `zh-CN`:
+
+| Variable | Value |
+|----------|-------|
+| `USE_AMAP` | `true` |
+| `AMAP_KEY` | your Amap Web Service key |
 
 ## Run Locally
 
