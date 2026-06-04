@@ -45,7 +45,7 @@ Cloudflare Pages env vars to switch to Amap when the UI language is `zh-CN`:
 ## Run Locally
 
 ```bash
-git clone https://github.com/qiaoshouqing/drive-escape.git
+git clone https://github.com/benshandebiao/drive-escape.git
 cd drive-escape
 python3 -m http.server 8080
 # open http://localhost:8080
