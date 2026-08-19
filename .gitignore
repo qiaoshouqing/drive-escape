@@ -1,2 +1,7 @@
 .vercel
-.vercel
+
+# 解压 skill 时带出的 macOS 元数据（不影响产物）
+.claude/__MACOSX/
+
+# 构建中间产物：24MB 原始区划，可用 scripts/minitool-build/fetch_geo.py 重新生成
+scripts/minitool-build/districts.json
