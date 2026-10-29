@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>周末自驾逃离计划</title>
+  <link rel="stylesheet" href="./assets/style.css" />
+</head>
+<body>
+
+<!-- ── 欢迎页 ── -->
+<section id="welcome">
+  <div class="welcome-card">
+    <div class="eyebrow">DRIVE ESCAPE</div>
+    <h1 class="headline">周末自驾逃离计划</h1>
+    <p class="sub">选择出发城市，看看 5 小时能开到哪儿</p>
+
+    <div class="search-wrap">
+      <input id="city-input" type="text" autocomplete="off" spellcheck="false"
+             placeholder="搜索城市，如 广州 / 苏州 / 大理" />
+      <span class="search-icon">⌕</span>
+    </div>
+    <div id="city-results"></div>
+
+    <div class="quick">
+      <div class="quick-label">实测数据城市</div>
+      <div id="quick-cities" class="quick-cities"></div>
+    </div>
+  </div>
+  <div class="welcome-foot">全部离线运行 · 数据已内置</div>
+</section>
+
+<!-- ── 地图页 ── -->
+<section id="map-view" hidden>
+  <canvas id="map"></canvas>
+
+  <header class="topbar">
+    <button id="btn-back" class="icon-btn touchable" type="button" aria-label="返回">‹</button>
+    <div class="topbar-title">
+      <div class="t-main" id="t-city">—</div>
+      <div class="t-sub" id="t-sub">5 小时驾车可达范围</div>
+    </div>
+    <button id="btn-share" class="icon-btn touchable" type="button" aria-label="分享">⇪</button>
+  </header>
+
+  <aside class="legend" id="legend">
+    <div class="legend-title">驾车耗时</div>
+    <div class="legend-bar" id="band-list"></div>
+    <div class="legend-scale"><span>0h</span><span>2.5h</span><span>5h</span></div>
+    <div class="legend-note" id="legend-note"></div>
+  </aside>
+
+  <div class="info-panel" id="info" hidden>
+    <button id="info-close" class="info-close touchable" type="button" aria-label="关闭">×</button>
+    <h4 id="info-name"></h4>
+    <div id="info-detail"></div>
+  </div>
+
+  <div class="hint" id="hint">单指拖动 · 双指缩放 · 点击区县查看详情</div>
+</section>
+
+<!-- ── 分享面板 ── -->
+<div class="sheet-mask" id="share-mask" hidden>
+  <div class="sheet" id="share-sheet">
+    <div class="sheet-title">生成分享图</div>
+    <div class="poster-wrap"><img id="poster-img" alt="分享图预览" /></div>
+    <div class="sheet-actions">
+      <button id="btn-save" class="btn primary touchable" type="button">保存到相册</button>
+      <button id="btn-note" class="btn touchable" type="button">发布笔记</button>
+    </div>
+    <button id="btn-share-close" class="btn ghost touchable" type="button">取消</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<div class="boot" id="boot"><div class="spinner"></div><span>正在准备地图…</span></div>
+
+<script src="./assets/geo.js"></script>
+<script src="./assets/cities.js"></script>
+<script src="./assets/drive.js"></script>
+<script src="./assets/app.js"></script>
+</body>
+</html>
