@@ -172,6 +172,8 @@ body {
 }
 
 .topbar-title { flex: 1; text-align: center; min-width: 0; }
+/* 右上角是宿主的「··· ⊙」胶囊，按钮都放左边；右边留同宽的空位让标题居中 */
+.topbar-spacer { width: 78px; flex-shrink: 0; }
 .t-main { font: 800 17px/1.2 var(--serif); }
 .t-sub { font-size: 11px; color: #7a7768; margin-top: 2px; }
 
