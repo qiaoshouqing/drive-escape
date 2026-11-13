@@ -649,26 +649,41 @@
     return fn(b);
   }
 
-  function saveToAlbum() {
+  // 小红书客户端 9.53+ 才有 share；版本号取自 launchOptions.miniToolEnv.buildVersion（如 9530xxx）
+  function clientVersion() {
+    try {
+      var e = window.xhs && window.xhs.launchOptions && window.xhs.launchOptions.miniToolEnv;
+      return Math.floor((Number(e && e.buildVersion) || 0) / 1000);
+    } catch (err) { return 0; }
+  }
+
+  // 发给好友：先发分享图，宿主不支持发图时退回小工具卡片。不需要任何权限
+  var sharing = false;
+  function shareToFriend() {
     withBridge(function (b) {
-      var btn = $('btn-save');
+      var v = clientVersion();
+      if (typeof b.share !== 'function' || (v && v < 953)) {
+        toast('这个版本还不能分享，升级小红书后再试');
+        return;
+      }
+      if (sharing) return;
+      sharing = true;
+      var btn = $('btn-friend');
       btn.disabled = true;
-      Promise.resolve()
-        .then(function () {
-          // 优先落成临时文件再存相册；容器也接受直接传 data:uri
-          if (typeof b.writeTempFile === 'function') {
-            return b.writeTempFile({ data: posterData }).then(function (r) {
-              return r && r.filePath ? r.filePath : posterData;
-            }, function () { return posterData; });
-          }
-          return posterData;
+      var call = function (o) {
+        try { return Promise.resolve(b.share(o)); } catch (err) { return Promise.reject(err); }
+      };
+      call({ type: 'image', image_resource: posterData })
+        .catch(function (e) {
+          if (e && e.errCode === 15501) return call({ type: 'card' });
+          throw e;
         })
-        .then(function (filePath) {
-          return b.saveImageToPhotosAlbum({ filePath: filePath });
-        })
-        .then(function () { toast('已保存到相册'); },
-              function (e) { toast('保存失败：' + ((e && e.errMsg) || '未知错误')); })
-        .then(function () { btn.disabled = false; });
+        .then(function () { $('share-mask').hidden = true; },
+              function (e) {
+                if (e && /cancel/i.test(e.errMsg || '')) return;
+                toast('分享失败：' + ((e && e.errMsg) || '未知错误'));
+              })
+        .then(function () { sharing = false; btn.disabled = false; });
     });
   }
 
@@ -724,7 +739,7 @@
     $('share-mask').addEventListener('click', function (e) {
       if (e.target === $('share-mask')) $('share-mask').hidden = true;
     });
-    $('btn-save').addEventListener('click', saveToAlbum);
+    $('btn-friend').addEventListener('click', shareToFriend);
     $('btn-note').addEventListener('click', publishNote);
   }
 
